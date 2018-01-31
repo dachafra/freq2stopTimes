@@ -4,8 +4,12 @@ import org.onebusaway.gtfs.impl.GtfsDaoImpl;
 import org.onebusaway.gtfs.model.*;
 import org.onebusaway.gtfs.serialization.GtfsWriter;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.time.*;
 import java.util.*;
@@ -15,12 +19,16 @@ public class Freq2StopTimes {
     private GtfsDaoImpl oldStore;
     private HashMap<String, String> newTrips;
     private Integer globalIdStopTimes;
+    private String outputPath;
+    private LocalDateTime todayMidnight;
 
-    public Freq2StopTimes(GtfsDaoImpl oldStore){
+    public Freq2StopTimes(GtfsDaoImpl oldStore, String outputPath){
         this.newStore = new GtfsDaoImpl();
         this.oldStore = oldStore;
         newTrips = new HashMap<>();
         globalIdStopTimes=1;
+        this.outputPath = outputPath;
+        this.todayMidnight =  LocalDateTime.of(LocalDate.now(ZoneId.of("Europe/Madrid")),LocalTime.MIDNIGHT);
     }
 
     //edit the ids of the trips with the departureTime extracted from frequencies
@@ -92,11 +100,11 @@ public class Freq2StopTimes {
             StopTime st = new StopTime(t);
             st.setTrip(new Trip());
             st.getTrip().setId(new AgencyAndId());
+            st.setArrivalTime(departureTime+(t.getArrivalTime()-header.getArrivalTime()));
+            st.setDepartureTime(departureTime+(t.getDepartureTime()-header.getDepartureTime()));
             st.getTrip().getId().setId(id);
             st.setId(globalIdStopTimes);
             st.getTrip().getId().setAgencyId(t.getTrip().getId().getAgencyId());
-            st.setArrivalTime(departureTime+(t.getArrivalTime()-header.getArrivalTime()));
-            st.setDepartureTime(departureTime+(t.getDepartureTime()-header.getDepartureTime()));
             globalIdStopTimes++;
             newStore.saveEntity(st);
         }
@@ -107,12 +115,39 @@ public class Freq2StopTimes {
 
     public void write(){
         GtfsWriter writer = new GtfsWriter();
-        writer.setOutputLocation(new File("/Users/dchaves/Downloads/gtfsSpainGoogle/CRTM/metro/updated"));
+        writer.setOutputLocation(new File(outputPath));
         try {
             writer.run(newStore);
             writer.close();
+            this.writeStop_times();
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+
+    public void writeStop_times() throws IOException{
+        //Get the file reference
+        Path path = Paths.get(outputPath+"/stop_times_aux.txt");
+
+        try (BufferedWriter writer = Files.newBufferedWriter(path))
+        {
+            writer.write("trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type\n");
+            Collection<StopTime> stopTimes = newStore.getAllStopTimes();
+            stopTimes.forEach(stopTime ->{
+
+                LocalDateTime localDateTime=todayMidnight.plusSeconds(stopTime.getDepartureTime()).minusHours(1);
+                String departureTime= new SimpleDateFormat("HH:mm:ss").format(Date.from(localDateTime.toInstant(ZoneOffset.UTC)));
+
+                localDateTime=todayMidnight.plusSeconds(stopTime.getArrivalTime()).minusHours(1);
+                String arrivalTime= new SimpleDateFormat("HH:mm:ss").format(Date.from(localDateTime.toInstant(ZoneOffset.UTC)));
+
+                try {
+                    writer.write(stopTime.getTrip().getId().getId()+","+arrivalTime+","+departureTime+","+stopTime.getStop().getId().getId()+","+stopTime.getStopSequence()+","+stopTime.getPickupType()+"\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            } );
         }
     }
 
