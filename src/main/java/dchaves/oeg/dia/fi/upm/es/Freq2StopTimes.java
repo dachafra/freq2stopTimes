@@ -22,13 +22,17 @@ public class Freq2StopTimes {
     private String outputPath;
     private LocalDateTime todayMidnight;
 
-    public Freq2StopTimes(GtfsDaoImpl oldStore, String outputPath){
+    public Freq2StopTimes(GtfsDaoImpl oldStore, String outputPath, String zoneId){
         this.newStore = new GtfsDaoImpl();
         this.oldStore = oldStore;
         newTrips = new HashMap<>();
         globalIdStopTimes=1;
         this.outputPath = outputPath;
-        this.todayMidnight =  LocalDateTime.of(LocalDate.now(ZoneId.of("Europe/Madrid")),LocalTime.MIDNIGHT);
+        this.todayMidnight =  LocalDateTime.of(LocalDate.now(ZoneId.of(zoneId)),LocalTime.MIDNIGHT);
+    }
+
+    public boolean checkFrequencies(){
+        return !oldStore.getAllFrequencies().isEmpty();
     }
 
     //edit the ids of the trips with the departureTime extracted from frequencies
@@ -38,7 +42,6 @@ public class Freq2StopTimes {
         Collection<Frequency> frequencies = oldStore.getAllFrequencies();
         HashMap<String,StopTime> firstStopTime = new HashMap<>();
         HashMap<String,ArrayList<StopTime>> sumaryStopTimes = this.sumaryStopTimes();
-        LocalDateTime todayMidnight = LocalDateTime.of(LocalDate.now(ZoneId.of("Europe/Madrid")),LocalTime.MIDNIGHT);
 
         //get the first stop of each trip
         stopTimes.forEach(stopTime -> {
@@ -127,8 +130,7 @@ public class Freq2StopTimes {
 
 
     public void writeStop_times() throws IOException{
-        //Get the file reference
-        Path path = Paths.get(outputPath+"/stop_times_aux.txt");
+        Path path = Paths.get(outputPath+"/stop_times.txt");
 
         try (BufferedWriter writer = Files.newBufferedWriter(path))
         {
@@ -165,9 +167,4 @@ public class Freq2StopTimes {
         return summary;
     }
 
-
-    public boolean checkFrequencies(){
-       return !oldStore.getAllFrequencies().isEmpty();
-
-    }
 }
